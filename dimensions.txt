@@ -1,0 +1,29 @@
+Wheel
+diameter 4.41 cm
+width 1.722 cm
+
+CNY70
+220
+10k
+
+0.7x0.7x0.6 wxlxh
+0.5x0.5
+
+esp32
+2.83 x 5.152 wxl
+
+7805
+1.02 width
+
+
+tbb
+2.074 x 2.05
+
+battery
+ 7.622 x 6.2 wxl
+
+lipo
+5 x 11 x 2.5
+
+N20
+4x1
