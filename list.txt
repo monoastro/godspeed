@@ -1,0 +1,12 @@
+battery x3
+motors extra x4
+wheels
+lipo charger
+soldering iron
+soldering wire
+esp32
+ams
+tbb
+glue gun + sticks
+super glue
+flex print
