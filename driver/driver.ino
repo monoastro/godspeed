@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <EEPROM.h>
 
 #define RIGHT_IN1 22
 #define RIGHT_IN2 23 
@@ -34,12 +35,12 @@ enum Junction
   STRAIGHT,
   RIGHT,
   LEFT,
-  STRAIGHT_RIGHT,
-  STRAIGHT_LEFT,
   T,
   CROSS,
   DEAD_END,
   END,
+  STRAIGHT_RIGHT,
+  STRAIGHT_LEFT,
 };
 
 Junction activeJunction =  STRAIGHT;
@@ -151,6 +152,14 @@ void motorTest()
   }
 }
 
+void readSensors()
+{
+  for(size_t i = 0; i<NUM_SENSORS; i++)
+  {
+    sensorsValues[i] = analogRead(sensors[i])>thresholdValues[i];
+  }
+}
+
 void printSensorsValues()
 {
   for(size_t i = 0; i<NUM_SENSORS; i++)
@@ -161,26 +170,16 @@ void printSensorsValues()
   Serial.println();
 }
 
-void readSensors()
-{
-  for(size_t i = 0; i<NUM_SENSORS; i++)
-  {
-    sensorsValues[i] = analogRead(sensors[i])>thresholdValues[i];
-  }
-}
-
-void turnCounterclockwise(unsigned leftSpeed = 90, unsigned rightSpeed = 127, unsigned milliseconds = 500)
+void turnCounterclockwise(unsigned leftSpeed = 90, unsigned rightSpeed = 127)
 {
   driveMotorLEFT(FORWARD, leftSpeed);
-  driveMotorRIGHT(FORWARD, rightSpeed);
-  delay(milliseconds);
+  driveMotorRIGHT(BACKWARD, rightSpeed);
 }
 
-void turnClockwise(unsigned leftSpeed = 127, unsigned rightSpeed = 90, unsigned milliseconds = 500)
+void turnClockwise(unsigned leftSpeed = 127, unsigned rightSpeed = 90)
 {
   driveMotorLEFT(FORWARD, leftSpeed);
-  driveMotorRIGHT(FORWARD, rightSpeed);
-  delay(milliseconds);
+  driveMotorRIGHT(BACKWARD, rightSpeed);
 }
 
 void findThreshold()
@@ -209,27 +208,59 @@ void findThreshold()
   stopMotors();
 }
 
+void loadThresholdValues(int* thresholdValues, size_t numSensors) {
+  for (size_t i = 0; i < numSensors; i++) {
+    EEPROM.get(i * sizeof(int), thresholdValues[i]);
+  }
+  Serial.println("Thresholds loaded from EEPROM.");
+}
+
+void printThresholdValues(int* thresholdValues, size_t numSensors) {
+  Serial.println("Threshold Values:");
+  for (size_t i = 0; i < NUM_SENSORS; i++) {
+    Serial.print("Sensor ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(thresholdValues[i]);
+  }
+}
+void saveThresholdValues(int* thresholdValues, size_t numSensors) 
+{
+  for (size_t i = 0; i < numSensors; i++) {
+    EEPROM.put(i * sizeof(int), thresholdValues[i]);
+  }
+  Serial.println("Thresholds saved to EEPROM.");
+}
+
+void calibrateThreshold()
+{
+   if (digitalRead(DRY_RUN) == HIGH) 
+   {
+    Serial.println("Button 16 pressed: Finding and saving thresholds...");
+    findThreshold();
+    saveThresholdValues(thresholdValues, NUM_SENSORS);
+  } 
+  if (digitalRead(ACTUAL_RUN) == HIGH) 
+  {
+    Serial.println("Button 17 pressed: Retrieving and displaying thresholds...");
+    loadThresholdValues(thresholdValues, NUM_SENSORS);
+    printThresholdValues(thresholdValues, NUM_SENSORS);
+  }
+}
+
 void identifyJunction()
 {
   if ((sensorsValues[0]==0)&&(sensorsValues[1]==0)&&(sensorsValues[2]==1)&&(sensorsValues[3]==0)&&(sensorsValues[4]==0))
   {
     activeJunction = STRAIGHT;
   }
-  else if ((sensorsValues[0]==0)&&(sensorsValues[1]==0)&&(sensorsValues[2]==0)&&(sensorsValues[3]==1)&&(sensorsValues[4]==1))
+  else if ((sensorsValues[0]==0)&&(sensorsValues[1]==0)&&(sensorsValues[2]==1)&&(sensorsValues[3]==1)&&(sensorsValues[4]==1))
   {
     activeJunction = RIGHT;
   }
-  else if ((sensorsValues[0]==1)&&(sensorsValues[1]==1)&&(sensorsValues[2]==0)&&(sensorsValues[3]==0)&&(sensorsValues[4]==0))
+  else if ((sensorsValues[0]==1)&&(sensorsValues[1]==1)&&(sensorsValues[2]==1)&&(sensorsValues[3]==0)&&(sensorsValues[4]==0))
   {
     activeJunction = LEFT;
-  }
-  else if ((sensorsValues[0]==0)&&(sensorsValues[1]==0)&&(sensorsValues[2]==1)&&(sensorsValues[3]==1)&&(sensorsValues[4]==1))
-  {
-    activeJunction = STRAIGHT_RIGHT;
-  }
-  else if ((sensorsValues[0]==1)&&(sensorsValues[1]==1)&&(sensorsValues[2]==0)&&(sensorsValues[3]==0)&&(sensorsValues[4]==0))
-  {
-    activeJunction = STRAIGHT_LEFT;
   }
   else if ((sensorsValues[0]==1)&&(sensorsValues[1]==0)&&(sensorsValues[2]==0)&&(sensorsValues[3]==0)&&(sensorsValues[4]==1))
   {
@@ -248,8 +279,10 @@ void identifyJunction()
     activeJunction = END;
   }
 }
-
-
+void turnLeft()
+{
+  
+}
 
 void setup() 
 {
@@ -287,46 +320,13 @@ void setup()
 
   //LED
   pinMode(END_LED, OUTPUT);
-}
 
-
-#include <EEPROM.h>
-
-void saveThresholdValues(int* thresholdValues, size_t numSensors) {
-  for (size_t i = 0; i < numSensors; i++) {
-    EEPROM.put(i * sizeof(int), thresholdValues[i]);
-  }
-  Serial.println("Thresholds saved to EEPROM.");
-}
-
-void loadThresholdValues(int* thresholdValues, size_t numSensors) {
-  for (size_t i = 0; i < numSensors; i++) {
-    EEPROM.get(i * sizeof(int), thresholdValues[i]);
-  }
-  Serial.println("Thresholds loaded from EEPROM.");
-}
-
-void printThresholdValues(int* thresholdValues, size_t numSensors) {
-  Serial.println("Threshold Values:");
-  for (size_t i = 0; i < NUM_SENSORS; i++) {
-    Serial.print("Sensor ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.println(thresholdValues[i]);
-  }
+  //calibration
+  findThreshold();
+  saveThresholdValues(thresholdValues, NUM_SENSORS);
 }
 
 void loop()
 {
-   if (digitalRead(DRY_RUN) == HIGH) 
-   {
-    Serial.println("Button 16 pressed: Finding and saving thresholds...");
-    findThreshold();
-    saveThresholdValues(thresholdValues, NUM_SENSORS);
-  } 
-  if (digitalRead(ACTUAL_RUN) == HIGH) { // Button 17 pressed
-    Serial.println("Button 17 pressed: Retrieving and displaying thresholds...");
-    loadThresholdValues(thresholdValues, NUM_SENSORS);
-    printThresholdValues(thresholdValues, NUM_SENSORS);
-  }
+  printSensorsAnalog();
 }
