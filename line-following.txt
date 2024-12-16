@@ -1,0 +1,163 @@
+const int PWMA = 19;  
+const int BIN1 = 4;   
+const int BIN2 = 5;  
+const int STBY = 21;
+const int AIN1 = 23;  
+const int AIN2 = 22;  
+const int PWMB = 18;
+const int pushButton = 34;
+
+#include <QTRSensors.h>
+
+QTRSensors qtr;
+
+const uint8_t SensorCount = 5;
+uint16_t sensorValues[SensorCount];
+int threshold[SensorCount];
+
+float Kp = 0.18;
+float Ki = 0.0001;
+float Kd = 2;
+
+float Pvalue;
+float Ivalue;
+float Dvalue;
+
+uint16_t position;
+int P, D, I, previousError, PIDvalue, error;
+int lsp, rsp;
+int lfspeed = 140;
+
+void setup()
+{
+  // configure the sensors
+  pinMode(PWMA, OUTPUT);
+  pinMode(AIN1, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(STBY, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
+  pinMode(PWMB, OUTPUT);
+  digitalWrite(STBY, HIGH);
+  pinMode(pushButton, INPUT);
+  
+  qtr.setTypeAnalog();
+  qtr.setSensorPins((const uint8_t[]){ 27, 26, 25, 33, 32 }, SensorCount);
+
+  delay(500);
+  pinMode(2, OUTPUT);
+  digitalWrite(2, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
+  
+  Serial.begin(9600);
+  // analogRead() takes about 0.1 ms on an AVR.
+  // 0.1 ms per sensor * 4 samples per sensor read (default) * 6 sensors
+  // * 10 reads per calibrate() call = ~24 ms per calibrate() call.
+  // Call calibrate() 400 times to make calibration take about 10 seconds.
+  motor_drive(150,-200);
+  for (uint16_t i = 0; i < 800; i++)
+  {
+    qtr.calibrate();
+  }
+  motor_drive(0,0);
+  digitalWrite(2, LOW); // turn off Arduino's LED to indicate we are done with calibration
+
+  // print the calibration minimum values measured when emitters were on
+  
+//  for (uint8_t i = 0; i < SensorCount; i++)
+//  {
+//    threshold[i] = (qtr.calibrationOn.minimum[i] + qtr.calibrationOn.maximum[i])/2;
+//    Serial.print(threshold[i]);
+//    Serial.print("  ");
+//  }
+//  Serial.println();
+  
+  delay(1000);
+}
+
+void loop()
+{
+  while(!digitalRead(pushButton)){}
+   robot_control();
+   while(!digitalRead(pushButton)){}
+   
+
+}
+
+void robot_control(){
+  while(1){
+    // read calibrated sensor values and obtain a measure of the line position
+    // from 0 to 4000 (for a white line, use readLineWhite() instead)
+    position = qtr.readLineWhite(sensorValues);
+    // Serial.println(position);
+    error = 2000 - position;
+//    Serial.println(error);
+    if(sensorValues[0]> 600 && sensorValues[1]>600 && sensorValues[2]>600 && sensorValues[3]>600 && sensorValues[4]>600){
+          motor_drive(0,0);
+          return;
+        }
+    while(sensorValues[0]<= 700 && sensorValues[1]<=700 && sensorValues[2]<=700 && sensorValues[3]<=700 && sensorValues[4]<=700){ // A case when the line follower leaves the line
+      position = qtr.readLineWhite(sensorValues);
+      if(previousError>0){       //Turn left if the line was to the left before
+        motor_drive(140, -140);
+      }
+      else {
+        motor_drive(-140, 140); // Else turn right
+      }
+    }
+    
+    
+    PID_Linefollow(error);
+  }
+}
+void PID_Linefollow(int error){
+    P = error;
+    I = I + error;
+    D = error - previousError;
+    
+    Pvalue = (Kp)*P;
+    Ivalue = (Ki)*I;
+    Dvalue = (Kd)*D; 
+
+    float PIDvalue = Pvalue + Ivalue + Dvalue;
+    previousError = error;
+
+    lsp = lfspeed + PIDvalue;
+    rsp = lfspeed - PIDvalue;
+
+    if (lsp > 255) {
+      lsp = 255;
+    }
+    if (lsp < -255) {
+      lsp = -255;
+    }
+    if (rsp > 255) {
+      rsp = 255;
+    }
+    if (rsp < -255) {
+      rsp = -255;                                                                                                                                                                                ;
+    }
+    motor_drive(lsp,rsp);
+}
+
+void motor_drive(int left, int right){
+  if (left >= 0) {
+    digitalWrite(BIN2, LOW);
+    digitalWrite(BIN1, HIGH);
+    analogWrite(PWMB, left);
+  } else {
+    digitalWrite(BIN1, LOW);
+    digitalWrite(BIN2, HIGH);
+    analogWrite(PWMB, -left);
+  }
+
+
+  if (right >= 0) {
+    digitalWrite(AIN2, LOW);
+    digitalWrite(AIN1, HIGH);
+    analogWrite(PWMA, right);
+  } else {
+    digitalWrite(AIN1, LOW);
+    digitalWrite(AIN2, HIGH);
+    analogWrite(PWMA, -right);
+  }
+}
